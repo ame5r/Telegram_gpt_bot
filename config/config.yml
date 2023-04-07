@@ -1,0 +1,12 @@
+telegram_token: "5650037038:AAGXgQKL-hfVsJSCQMZn-5xijHKsTgScquE"
+openai_api_key: "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"
+use_chatgpt_api: true
+allowed_telegram_usernames: []  # if empty, the bot is available to anyone. pass a username string to allow it and/or user ids as integers
+new_dialog_timeout: 600  # new dialog starts after timeout (in seconds)
+enable_message_streaming: true  # if set, messages will be shown to user word-by-word
+payme_link: https://payme.uz/63d3d529f9b3d2b5a817c390
+n_default_tokens: 100
+# prices
+chatgpt_price_per_1000_tokens: 0.002
+gpt_price_per_1000_tokens: 0.02
+whisper_price_per_1_min: 0.006
