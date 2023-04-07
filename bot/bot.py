@@ -49,12 +49,32 @@ HELP_MESSAGE = f"""Commands:
 ⚪ /settings – Show settings
 ⚪ /balance – Show balance
 ⚪ /help – Show help
+⚪ /paid - Send notifecation for admin to process transaction
+"""
+ADMIN_HELP_MESSAGE = f"""Commands:
+⚪ /retry – Regenerate last bot answer
+⚪ /new – Start new dialog
+⚪ /mode – Select chat mode
+⚪ /settings – Show settings
+⚪ /balance – Show balance
+⚪ /help – Show help
+⚪ /paid - Send notifecation for admin to process transaction
+⚪ /adduser USERNAME - Add user (for testing)
+⚪ /removeuser USERNAME - Remove user (for testing)
+⚪ /recharge USERNAME N_TOKENS - Add tokens for username
+
 """
 
 
 def split_text_into_chunks(text, chunk_size):
     for i in range(0, len(text), chunk_size):
         yield text[i:i + chunk_size]
+
+async def is_user_allowed(user:User):
+    if isAdmin(user):
+        return True
+    return db.is_user_allowed(user.username)
+
 
 
 async def register_user_if_not_exists(update: Update, context: CallbackContext, user: User):
@@ -94,6 +114,10 @@ async def register_user_if_not_exists(update: Update, context: CallbackContext, 
 
 
 async def start_handle(update: Update, context: CallbackContext):
+    if isAdmin(update.message.from_user.username):
+        await add_new_user_handle(update,context)
+    elif not await is_user_allowed(update.message.from_user): return
+
     await register_user_if_not_exists(update, context, update.message.from_user)
     user_id = update.message.from_user.id
 
@@ -101,22 +125,34 @@ async def start_handle(update: Update, context: CallbackContext):
     db.start_new_dialog(user_id)
 
     reply_text = "Hi! I'm <b>ChatGPT</b> bot implemented with GPT-3.5 OpenAI API 🤖\n\n"
-    reply_text += HELP_MESSAGE
-    reply_text += f"\n🔴Currently you have FREE {config.n_default_tokens} tokens"
+    if not isAdmin(update.message.from_user):
+        reply_text += HELP_MESSAGE
+    else:
+        reply_text += ADMIN_HELP_MESSAGE
+    reply_text += f"\nNEW USER?\n🔴Currently you have FREE {config.n_default_tokens} tokens"
 
     reply_text += "\nAnd now... ask me anything!"
 
     await update.message.reply_text(reply_text, parse_mode=ParseMode.HTML)
 
+async def add_new_user_handle(update: Update, context: CallbackContext):
+    if not isAdmin(update.message.from_user): return
+    await db.add_alllowed_user(update.message.from_user.username)
+
 
 async def help_handle(update: Update, context: CallbackContext):
+    if not await is_user_allowed(update.message.from_user): return
     await register_user_if_not_exists(update, context, update.message.from_user)
     user_id = update.message.from_user.id
     db.set_user_attribute(user_id, "last_interaction", datetime.now())
     await update.message.reply_text(HELP_MESSAGE, parse_mode=ParseMode.HTML)
 
+async def remove_allowed_user_handle(update: Update):
+    if not isAdmin(update.message.from_user): return
+    await db.remove_alllowed_user(update.message.from_user.username)
 
 async def retry_handle(update: Update, context: CallbackContext):
+    if not await is_user_allowed(update.message.from_user): return
     await register_user_if_not_exists(update, context, update.message.from_user)
     if await is_previous_message_not_answered_yet(update, context): return
 
@@ -159,23 +195,27 @@ async def user_paid(update: Update, context: CallbackContext):
     logger.info(f'The admin id is {admin_id}')
     send_to_user(admin_id,f"The user {username} has paid!")
 
+def isAdmin(user):
+    return user.username == config.admin_username
 
 
-async def recharge_balance(update: Update, context: CallbackContext):
-    args = " ".join(context.args)
+
+async def recharge_balance_handle(update: Update, context: CallbackContext):
+    if not isAdmin(update.message.from_user): return
+    args = update.message.text.split()[1:]
     username = args[0]
-    amount = args[1]
-    if not amount.isnumeric():
-        await update.message.reply_text(f"The number of token is invalid {amount}")
+    amountStr = args[1]
+    if not amountStr.isnumeric():
+        await update.message.reply_text(f"The number of token is invalid {amountStr}")
         return
     user_id = db.find_user_id(username)
     if user_id is None:
         await update.message.reply_text(f"user does not exist {username}")
         return
-    
+    amount = int(amountStr)
     _,current_balance,current_used = await db.recharge_user_balance(user_id,amount)
     
-    message = f"Congratulations!\nYour have new tokens now!🥳\n"
+    message = f"Congratulations!\nYou have new tokens now!🥳\n"
     if current_used is 0:
         message +="Note: your usage has been reset\n"
     
@@ -185,6 +225,7 @@ async def recharge_balance(update: Update, context: CallbackContext):
     
     
 async def message_handle(update: Update, context: CallbackContext, message=None, use_new_dialog_timeout=True):
+    if not await is_user_allowed(update.message.from_user): return
     user_id = update.message.from_user.id
     logger.info("ChatID:"+str(db.get_user_attribute(user_id,"chat_id")))
     logger.info("UserID:"+str(user_id))
@@ -320,6 +361,7 @@ async def message_handle(update: Update, context: CallbackContext, message=None,
 
 
 async def is_previous_message_not_answered_yet(update: Update, context: CallbackContext):
+    if not await is_user_allowed(update.message.from_user): return
     await register_user_if_not_exists(update, context, update.message.from_user)
 
     user_id = update.message.from_user.id
@@ -333,6 +375,7 @@ async def is_previous_message_not_answered_yet(update: Update, context: Callback
 
 
 async def voice_message_handle(update: Update, context: CallbackContext):
+    if not await is_user_allowed(update.message.from_user): return
     await register_user_if_not_exists(update, context, update.message.from_user)
     if await is_previous_message_not_answered_yet(update, context): return
 
@@ -366,6 +409,7 @@ async def voice_message_handle(update: Update, context: CallbackContext):
 
 
 async def new_dialog_handle(update: Update, context: CallbackContext):
+    if not await is_user_allowed(update.message.from_user): return
     await register_user_if_not_exists(update, context, update.message.from_user)
     if await is_previous_message_not_answered_yet(update, context): return
 
@@ -380,6 +424,7 @@ async def new_dialog_handle(update: Update, context: CallbackContext):
 
 
 async def cancel_handle(update: Update, context: CallbackContext):
+    if not await is_user_allowed(update.message.from_user): return
     await register_user_if_not_exists(update, context, update.message.from_user)
 
     user_id = update.message.from_user.id
@@ -393,6 +438,7 @@ async def cancel_handle(update: Update, context: CallbackContext):
 
 
 async def show_chat_modes_handle(update: Update, context: CallbackContext):
+    if not await is_user_allowed(update.message.from_user): return
     await register_user_if_not_exists(update, context, update.message.from_user)
     if await is_previous_message_not_answered_yet(update, context): return
 
@@ -408,6 +454,7 @@ async def show_chat_modes_handle(update: Update, context: CallbackContext):
 
 
 async def set_chat_mode_handle(update: Update, context: CallbackContext):
+    if not await is_user_allowed(update.message.from_user): return
     await register_user_if_not_exists(update.callback_query, context, update.callback_query.from_user)
     user_id = update.callback_query.from_user.id
 
@@ -423,6 +470,7 @@ async def set_chat_mode_handle(update: Update, context: CallbackContext):
 
 
 def get_settings_menu(user_id: int):
+    
     current_model = db.get_user_attribute(user_id, "current_model")
     text = config.models["info"][current_model]["description"]
 
@@ -449,6 +497,7 @@ def get_settings_menu(user_id: int):
 
 
 async def settings_handle(update: Update, context: CallbackContext):
+    if not await is_user_allowed(update.message.from_user): return
     await register_user_if_not_exists(update, context, update.message.from_user)
     if await is_previous_message_not_answered_yet(update, context): return
 
@@ -460,6 +509,7 @@ async def settings_handle(update: Update, context: CallbackContext):
 
 
 async def set_settings_handle(update: Update, context: CallbackContext):
+    if not await is_user_allowed(update.message.from_user): return
     await register_user_if_not_exists(update.callback_query, context, update.callback_query.from_user)
     user_id = update.callback_query.from_user.id
 
@@ -479,6 +529,7 @@ async def set_settings_handle(update: Update, context: CallbackContext):
 
 
 async def show_balance_handle(update: Update, context: CallbackContext):
+    if not await is_user_allowed(update.message.from_user): return
     await register_user_if_not_exists(update, context, update.message.from_user)
 
     user_id = update.message.from_user.id
@@ -516,6 +567,7 @@ async def show_balance_handle(update: Update, context: CallbackContext):
 
 
 async def edited_message_handle(update: Update, context: CallbackContext):
+    if not await is_user_allowed(update.message.from_user): return
     text = "🥲 Unfortunately, message <b>editing</b> is not supported"
     await update.edited_message.reply_text(text, parse_mode=ParseMode.HTML)
 
@@ -578,8 +630,10 @@ def run_bot() -> None:
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & user_filter, message_handle))
     application.add_handler(CommandHandler("retry", retry_handle, filters=user_filter))
     application.add_handler(CommandHandler("new", new_dialog_handle, filters=user_filter))
+    application.add_handler(CommandHandler("adduser", add_new_user_handle, filters=user_filter))
+    application.add_handler(CommandHandler("removeuser", remove_allowed_user_handle, filters=user_filter))
     application.add_handler(CommandHandler("cancel", cancel_handle, filters=user_filter))
-    application.add_handler(CommandHandler("recharge", recharge_balance, filters=user_filter))
+    application.add_handler(CommandHandler("recharge", recharge_balance_handle, filters=user_filter))
     application.add_handler(MessageHandler(filters.VOICE & user_filter, voice_message_handle))
 
     application.add_handler(CommandHandler("mode", show_chat_modes_handle, filters=user_filter))

@@ -16,6 +16,7 @@ class Database:
         
         self.user_collection = self.db["user"]
         self.dialog_collection = self.db["dialog"]
+        self.allowed_users = self.db["allowed_users"]
 
     def check_if_user_exists(self, user_id: int, raise_exception: bool = False):
  
@@ -80,6 +81,46 @@ class Database:
         
         return n_overall_used_tokens < balance , config.no_tokens_message(n_overall_used_tokens,balance),n_overall_used_tokens,balance
     
+    async def is_user_allowed(self,username):
+            query = {'usernames': username}
+            existing_user = self.allowed_users.find_one(query)
+            
+            if existing_user:
+                logger.info(f"Username {username} already exists in the collection")
+                return True
+            return False
+
+    async def add_alllowed_user(self,username):
+            query = {'usernames': username}
+            existing_user = self.allowed_users.find_one(query)
+            
+            if existing_user:
+                logger.info(f"Username {username} already exists in the collection")
+                return
+            
+            # If the username doesn't exist, add it to the collection
+            result = self.allowed_users.update_one({}, {'$push': {'usernames': username}})
+            if result.modified_count == 1:
+                logger.info(f"Added username {username} to the collection")
+            else:
+                logger.info(f"Failed to add username {username} to the collection")
+
+
+    async def remove_alllowed_user(self,username):
+            query = {'usernames': username}
+            existing_user = self.allowed_users.find_one(query)
+            
+            if not existing_user:
+                logger.info(f"Username {username} not exists in the collection")
+                return
+            
+            # If the username doesn't exist, add it to the collection
+            result = self.allowed_users.update_one({}, {'$pull': {'usernames': username}})
+            if result.modified_count == 1:
+                logger.info(f"Deleted username {username} to the collection")
+            else:
+                logger.info(f"Failed to Delete username {username} to the collection")
+
     async def recharge_user_balance(self,user_id,new_balance):
         hasBalance,_,n_used_tokens,_ = await self.isHasBalance(user_id)
 
