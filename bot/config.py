@@ -23,10 +23,12 @@ mongodb_uri = f"mongodb://mongo:{config_env['MONGODB_PORT']}"
 admin_username = "AmeerGN" #"aaa999011"
 n_default_tokens = config_yaml['n_default_tokens']
 
-def no_tokens_message(tokens_spent, balance):
+def no_tokens_message():
     
    return f"""<b>You have NO tokens left</b>
-You have totally spent {tokens_spent} tokens while your balance is {balance}.
+You are run out of tokens.
+You need at least 150 tokens to be able to ask a question.
+But don't worry you can buy token with a small amount of money!
 Each 1000 tokens cost ONLY 0.02$.
 NOTE: 🔴🔴PLEASE USE YOUR TELEGRAM USERNAME WHEN YOU PAY🔴🔴
 then send /paid to process your transation."""
