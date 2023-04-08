@@ -67,20 +67,7 @@ class Database:
         result = self.user_collection.find_one(query)
         return result['chat_id']
     
-    async def isHasBalance(self,user_id):
-        used_tokens = self.get_user_attribute(user_id,"n_used_tokens")
-        balance = self.get_user_attribute(user_id,"n_tokens_balance")
-        if  not used_tokens:
-            return True, '',-1,-1
-        
-        n_overall_used_tokens = 0
 
-        for model in used_tokens:
-            n_overall_used_tokens += used_tokens[model]["n_input_tokens"]
-            n_overall_used_tokens += used_tokens[model]["n_output_tokens"]
-        
-        return n_overall_used_tokens < balance , config.no_tokens_message(n_overall_used_tokens,balance),n_overall_used_tokens,balance
-    
     async def is_user_allowed(self,username):
             query = {'usernames': username}
             existing_user = self.allowed_users.find_one(query)
@@ -106,7 +93,7 @@ class Database:
                 logger.info(f"Failed to add username {username} to the collection")
 
 
-    async def remove_alllowed_user(self,username):
+    async def remove_allowed_user(self,username):
             query = {'usernames': username}
             existing_user = self.allowed_users.find_one(query)
             
@@ -122,18 +109,15 @@ class Database:
                 logger.info(f"Failed to Delete username {username} to the collection")
 
     async def recharge_user_balance(self,user_id,new_balance):
-        hasBalance,_,n_used_tokens,_ = await self.isHasBalance(user_id)
-
-        if not hasBalance:
-            self.set_user_attribute(user_id,'n_used_tokens',{})
-            self.set_user_attribute(user_id,'n_tokens_balance',new_balance)
-            return hasBalance,new_balance,0
-        else:
-             self.set_user_attribute(user_id,'n_tokens_balance',n_used_tokens+new_balance)
-             return hasBalance,n_used_tokens+new_balance,n_used_tokens
+         current_balance = self.get_user_attribute(user_id, "n_tokens_balance")
+         self.set_user_attribute(user_id,'n_tokens_balance',current_balance+new_balance)
+         return current_balance+new_balance
+ 
 
         
-
+    async def isHasBalance(self,user_id):
+        return self.get_user_attribute(user_id,"n_tokens_balance")>150
+    
 
     def start_new_dialog(self, user_id: int):
         self.check_if_user_exists(user_id, raise_exception=True)
@@ -174,7 +158,7 @@ class Database:
 
     def update_n_used_tokens(self, user_id: int, model: str, n_input_tokens: int, n_output_tokens: int):
         n_used_tokens_dict = self.get_user_attribute(user_id, "n_used_tokens")
-
+        n_overall_used_tokens = n_input_tokens+n_output_tokens
         if model in n_used_tokens_dict:
             n_used_tokens_dict[model]["n_input_tokens"] += n_input_tokens
             n_used_tokens_dict[model]["n_output_tokens"] += n_output_tokens
@@ -183,8 +167,13 @@ class Database:
                 "n_input_tokens": n_input_tokens,
                 "n_output_tokens": n_output_tokens
             }
-
+        current_balance = self.get_user_attribute(user_id, "n_tokens_balance")
+        if n_overall_used_tokens < current_balance:
+            self.set_user_attribute(user_id,'n_tokens_balance',current_balance - n_overall_used_tokens)
+        else:
+            self.set_user_attribute(user_id,'n_tokens_balance',0)
         self.set_user_attribute(user_id, "n_used_tokens", n_used_tokens_dict)
+         
 
     def get_dialog_messages(self, user_id: int, dialog_id: Optional[str] = None):
         self.check_if_user_exists(user_id, raise_exception=True)
