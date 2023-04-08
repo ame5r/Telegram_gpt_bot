@@ -43,24 +43,14 @@ user_semaphores = {}
 user_tasks = {}
 
 HELP_MESSAGE = f"""Commands:
-⚪ /retry – Regenerate last bot answer
-⚪ /new – Start new dialog
-⚪ /mode – Select chat mode
-⚪ /settings – Show settings
 ⚪ /balance – Show balance
 ⚪ /help – Show help
 ⚪ /paid - Send notifecation for admin to process transaction
 """
 ADMIN_HELP_MESSAGE = f"""Commands:
-⚪ /retry – Regenerate last bot answer
-⚪ /new – Start new dialog
-⚪ /mode – Select chat mode
-⚪ /settings – Show settings
 ⚪ /balance – Show balance
 ⚪ /help – Show help
 ⚪ /paid - Send notifecation for admin to process transaction
-⚪ /adduser USERNAME - Add user (for testing)
-⚪ /removeuser USERNAME - Remove user (for testing)
 ⚪ /recharge USERNAME N_TOKENS - Add tokens for username
 
 """
@@ -71,6 +61,7 @@ def split_text_into_chunks(text, chunk_size):
         yield text[i:i + chunk_size]
 
 async def is_user_allowed(user:User):
+    return True
     if isAdmin(user):
         return True
     return db.is_user_allowed(user.username)
@@ -114,7 +105,7 @@ async def register_user_if_not_exists(update: Update, context: CallbackContext, 
 
 
 async def start_handle(update: Update, context: CallbackContext):
-    if isAdmin(update.message.from_user.username):
+    if isAdmin(update.message.from_user):
         await add_new_user_handle(update,context)
     elif not await is_user_allowed(update.message.from_user): return
 
@@ -203,6 +194,9 @@ def isAdmin(user):
 async def recharge_balance_handle(update: Update, context: CallbackContext):
     if not isAdmin(update.message.from_user): return
     args = update.message.text.split()[1:]
+    if len(args) != 2:
+        await update.message.reply_text(f"Invalid parameters")
+        return
     username = args[0]
     amountStr = args[1]
     if not amountStr.isnumeric():
@@ -213,13 +207,11 @@ async def recharge_balance_handle(update: Update, context: CallbackContext):
         await update.message.reply_text(f"user does not exist {username}")
         return
     amount = int(amountStr)
-    _,current_balance,current_used = await db.recharge_user_balance(user_id,amount)
+    current_balance = await db.recharge_user_balance(user_id,amount)
     
     message = f"Congratulations!\nYou have new tokens now!🥳\n"
-    if current_used is 0:
-        message +="Note: your usage has been reset\n"
-    
-    message += f"Usage: {current_used}\nCurrent balance: {current_balance}"
+    message += f"You got {amount} tokens."
+    message += f"Current balance: {current_balance}"
     send_to_user(user_id,message)
     
     
@@ -237,9 +229,9 @@ async def message_handle(update: Update, context: CallbackContext, message=None,
 
     await register_user_if_not_exists(update, context, update.message.from_user)
     try:
-        hasBalance, balance_message,_,_ = await db.isHasBalance(user_id)
+        hasBalance = await db.isHasBalance(user_id)
         if not hasBalance:
-            await update.message.reply_text(balance_message, parse_mode=ParseMode.HTML,reply_markup=InlineKeyboardMarkup([
+            await update.message.reply_text(config.no_tokens_message(), parse_mode=ParseMode.HTML,reply_markup=InlineKeyboardMarkup([
         [InlineKeyboardButton(text='🧠 Buy Tokens', url=config.payme_link)],
         ]))
             return
@@ -541,7 +533,7 @@ async def show_balance_handle(update: Update, context: CallbackContext):
 
     n_used_tokens_dict = db.get_user_attribute(user_id, "n_used_tokens")
     n_transcribed_seconds = db.get_user_attribute(user_id, "n_transcribed_seconds")
-
+    n_current_tokens = db.get_user_attribute(user_id,'n_tokens_balance')
     details_text = "🏷️ Details:\n"
     for model_key in sorted(n_used_tokens_dict.keys()):
         n_input_tokens, n_output_tokens = n_used_tokens_dict[model_key]["n_input_tokens"], n_used_tokens_dict[model_key]["n_output_tokens"]
@@ -558,10 +550,11 @@ async def show_balance_handle(update: Update, context: CallbackContext):
         details_text += f"- Whisper (voice recognition): <b>{voice_recognition_n_spent_dollars:.03f}$</b> / <b>{n_transcribed_seconds:.01f} seconds</b>\n"
 
     total_n_spent_dollars += voice_recognition_n_spent_dollars
-
-    text = f"You spent <b>{total_n_spent_dollars:.03f}$</b>\n"
-    text += f"You used <b>{total_n_used_tokens}</b> tokens\n\n"
-    text += details_text
+    
+    #text = f"You spent <b>{total_n_spent_dollars:.03f}$</b>\n"
+    text = f"You used <b>{total_n_used_tokens}</b> tokens\n\n"
+    text +=f"Your current balance is <b>{str(n_current_tokens)}</b> tokens\n"
+    #text += details_text
 
     await update.message.reply_text(text, parse_mode=ParseMode.HTML)
 
@@ -599,11 +592,11 @@ async def error_handle(update: Update, context: CallbackContext) -> None:
 
 async def post_init(application: Application):
     await application.bot.set_my_commands([
-        BotCommand("/new", "Start new dialog"),
-        BotCommand("/mode", "Select chat mode"),
-        BotCommand("/retry", "Re-generate response for previous query"),
+        #BotCommand("/new", "Start new dialog"),
+        #BotCommand("/mode", "Select chat mode"),
+        #BotCommand("/retry", "Re-generate response for previous query"),
         BotCommand("/balance", "Show balance"),
-        BotCommand("/settings", "Show settings"),
+        #BotCommand("/settings", "Show settings"),
         BotCommand("/help", "Show help message"),
     ])
 
@@ -628,18 +621,18 @@ def run_bot() -> None:
     application.add_handler(CommandHandler("help", help_handle, filters=user_filter))
     application.add_handler(CommandHandler("paid", user_paid, filters=user_filter))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & user_filter, message_handle))
-    application.add_handler(CommandHandler("retry", retry_handle, filters=user_filter))
-    application.add_handler(CommandHandler("new", new_dialog_handle, filters=user_filter))
-    application.add_handler(CommandHandler("adduser", add_new_user_handle, filters=user_filter))
-    application.add_handler(CommandHandler("removeuser", remove_allowed_user_handle, filters=user_filter))
-    application.add_handler(CommandHandler("cancel", cancel_handle, filters=user_filter))
+ #   application.add_handler(CommandHandler("retry", retry_handle, filters=user_filter))
+ #   application.add_handler(CommandHandler("new", new_dialog_handle, filters=user_filter))
+  #  application.add_handler(CommandHandler("adduser", add_new_user_handle, filters=user_filter))
+  #  application.add_handler(CommandHandler("removeuser", remove_allowed_user_handle, filters=user_filter))
+  #  application.add_handler(CommandHandler("cancel", cancel_handle, filters=user_filter))
     application.add_handler(CommandHandler("recharge", recharge_balance_handle, filters=user_filter))
     application.add_handler(MessageHandler(filters.VOICE & user_filter, voice_message_handle))
 
-    application.add_handler(CommandHandler("mode", show_chat_modes_handle, filters=user_filter))
+  #  application.add_handler(CommandHandler("mode", show_chat_modes_handle, filters=user_filter))
     application.add_handler(CallbackQueryHandler(set_chat_mode_handle, pattern="^set_chat_mode"))
 
-    application.add_handler(CommandHandler("settings", settings_handle, filters=user_filter))
+  #  application.add_handler(CommandHandler("settings", settings_handle, filters=user_filter))
     application.add_handler(CallbackQueryHandler(set_settings_handle, pattern="^set_settings"))
 
     application.add_handler(CommandHandler("balance", show_balance_handle, filters=user_filter))
