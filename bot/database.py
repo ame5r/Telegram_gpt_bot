@@ -65,7 +65,9 @@ class Database:
 
         # Use the find_one method to retrieve the first matching entry
         result = self.user_collection.find_one(query)
-        return result['chat_id']
+        if result != None:
+            return result['chat_id']
+        return None
     
 
     async def is_user_allowed(self,username):
@@ -116,7 +118,7 @@ class Database:
 
         
     async def isHasBalance(self,user_id):
-        return self.get_user_attribute(user_id,"n_tokens_balance")>150
+        return self.get_user_attribute(user_id,"n_tokens_balance")>=100
     
 
     def start_new_dialog(self, user_id: int):

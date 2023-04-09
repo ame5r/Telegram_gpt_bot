@@ -42,18 +42,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(mess
 user_semaphores = {}
 user_tasks = {}
 
-HELP_MESSAGE = f"""Commands:
-⚪ /balance – Show balance
-⚪ /help – Show help
-⚪ /paid - Send notifecation for admin to process transaction
-"""
-ADMIN_HELP_MESSAGE = f"""Commands:
-⚪ /balance – Show balance
-⚪ /help – Show help
-⚪ /paid - Send notifecation for admin to process transaction
-⚪ /recharge USERNAME N_TOKENS - Add tokens for username
 
-"""
 
 
 def split_text_into_chunks(text, chunk_size):
@@ -106,6 +95,7 @@ async def register_user_if_not_exists(update: Update, context: CallbackContext, 
 
 async def start_handle(update: Update, context: CallbackContext):
     if isAdmin(update.message.from_user):
+        logger.info('THIS IS ADMIN')
         await add_new_user_handle(update,context)
     elif not await is_user_allowed(update.message.from_user): return
 
@@ -115,16 +105,12 @@ async def start_handle(update: Update, context: CallbackContext):
     db.set_user_attribute(user_id, "last_interaction", datetime.now())
     db.start_new_dialog(user_id)
 
-    reply_text = "Hi! I'm <b>ChatGPT</b> bot implemented with GPT-3.5 OpenAI API 🤖\n\n"
-    if not isAdmin(update.message.from_user):
-        reply_text += HELP_MESSAGE
-    else:
-        reply_text += ADMIN_HELP_MESSAGE
-    reply_text += f"\nNEW USER?\n🔴Currently you have FREE {config.n_default_tokens} tokens"
+    reply_text= config.get_start_message(isAdmin(update.message.from_user),update)
+    try:
+        await update.message.reply_text(reply_text, parse_mode=ParseMode.HTML)
+    except telegram.error.BadRequest as e:
+        update.message.reply_text("...")
 
-    reply_text += "\nAnd now... ask me anything!"
-
-    await update.message.reply_text(reply_text, parse_mode=ParseMode.HTML)
 
 async def add_new_user_handle(update: Update, context: CallbackContext):
     if not isAdmin(update.message.from_user): return
@@ -136,7 +122,10 @@ async def help_handle(update: Update, context: CallbackContext):
     await register_user_if_not_exists(update, context, update.message.from_user)
     user_id = update.message.from_user.id
     db.set_user_attribute(user_id, "last_interaction", datetime.now())
-    await update.message.reply_text(HELP_MESSAGE, parse_mode=ParseMode.HTML)
+    if isAdmin(update.message.from_user):
+        await update.message.reply_text(config.ADMIN_HELP_MESSAGE, parse_mode=ParseMode.HTML)
+    else:
+        await update.message.reply_text(config.HELP_MESSAGE, parse_mode=ParseMode.HTML)
 
 async def remove_allowed_user_handle(update: Update):
     if not isAdmin(update.message.from_user): return
@@ -181,10 +170,10 @@ def send_to_user(user_id,message):
     else:
         logger.info("Error sending message:", response.text)
 async def user_paid(update: Update, context: CallbackContext):
-    username = update.message.from_user.username
+    username = update.message.from_user.id
     admin_id = db.find_user_id(config.admin_username)
     logger.info(f'The admin id is {admin_id}')
-    send_to_user(admin_id,f"The user {username} has paid!")
+    send_to_user(admin_id,config.user_paid(username))
 
 def isAdmin(user):
     return user.username == config.admin_username
@@ -195,24 +184,22 @@ async def recharge_balance_handle(update: Update, context: CallbackContext):
     if not isAdmin(update.message.from_user): return
     args = update.message.text.split()[1:]
     if len(args) != 2:
-        await update.message.reply_text(f"Invalid parameters")
+        await update.message.reply_text(config.invalid_parameters())
         return
-    username = args[0]
+    user_id = args[0]
     amountStr = args[1]
     if not amountStr.isnumeric():
-        await update.message.reply_text(f"The number of token is invalid {amountStr}")
+        await update.message.reply_text(config.toke_amount_invalid(amountStr))
         return
-    user_id = db.find_user_id(username)
-    if user_id is None:
-        await update.message.reply_text(f"user does not exist {username}")
+    if user_id is None or not user_id.isnumeric():
+        await update.message.reply_text(config.user_not_exists(user_id))
         return
     amount = int(amountStr)
+    user_id = int(user_id)
     current_balance = await db.recharge_user_balance(user_id,amount)
     
-    message = f"Congratulations!\nYou have new tokens now!🥳\n"
-    message += f"You got {amount} tokens."
-    message += f"Current balance: {current_balance}"
-    send_to_user(user_id,message)
+
+    send_to_user(user_id,config.you_got_tokens(amount,current_balance))
     
     
     
@@ -221,7 +208,7 @@ async def message_handle(update: Update, context: CallbackContext, message=None,
     user_id = update.message.from_user.id
     logger.info("ChatID:"+str(db.get_user_attribute(user_id,"chat_id")))
     logger.info("UserID:"+str(user_id))
-    logger.info("Username:"+str(db.get_user_attribute(user_id,"username")))
+   # logger.info("Username:"+str(db.get_user_attribute(user_id,"username")))
     # check if message is edited
     if update.edited_message is not None:
         await edited_message_handle(update, context)
@@ -238,7 +225,7 @@ async def message_handle(update: Update, context: CallbackContext, message=None,
     except telegram.error.BadRequest as e:
             logger.error(e)
             error_text = f"Something went wrong during completion."
-            await update.message.reply_text(error_text)
+            #await update.message.reply_text(error_text)
             return
     if await is_previous_message_not_answered_yet(update, context): return
 
@@ -249,7 +236,7 @@ async def message_handle(update: Update, context: CallbackContext, message=None,
         if use_new_dialog_timeout:
             if (datetime.now() - db.get_user_attribute(user_id, "last_interaction")).seconds > config.new_dialog_timeout and len(db.get_dialog_messages(user_id)) > 0:
                 db.start_new_dialog(user_id)
-                await update.message.reply_text(f"Starting new dialog due to timeout (<b>{openai_utils.CHAT_MODES[chat_mode]['name']}</b> mode) ✅", parse_mode=ParseMode.HTML)
+                #await update.message.reply_text(f"Starting new dialog due to timeout (<b>{openai_utils.CHAT_MODES[chat_mode]['name']}</b> mode) ✅", parse_mode=ParseMode.HTML)
         db.set_user_attribute(user_id, "last_interaction", datetime.now())
 
         # in case of CancelledError
@@ -326,17 +313,18 @@ async def message_handle(update: Update, context: CallbackContext, message=None,
         except Exception as e:
             error_text = f"Something went wrong during completion. Reason: {e}"
             logger.error(error_text)
-            await update.message.reply_text(error_text)
+            #await update.message.reply_text(error_text)
             return
 
         # send message if some messages were removed from the context
+        '''
         if n_first_dialog_messages_removed > 0:
             if n_first_dialog_messages_removed == 1:
                 text = "✍️ <i>Note:</i> Your current dialog is too long, so your <b>first message</b> was removed from the context.\n Send /new command to start new dialog"
             else:
                 text = f"✍️ <i>Note:</i> Your current dialog is too long, so <b>{n_first_dialog_messages_removed} first messages</b> were removed from the context.\n Send /new command to start new dialog"
             await update.message.reply_text(text, parse_mode=ParseMode.HTML)
-
+        '''
     async with user_semaphores[user_id]:
         task = asyncio.create_task(message_handle_fn())
         user_tasks[user_id] = task
@@ -358,8 +346,8 @@ async def is_previous_message_not_answered_yet(update: Update, context: Callback
 
     user_id = update.message.from_user.id
     if user_semaphores[user_id].locked():
-        text = "⏳ Please <b>wait</b> for a reply to the previous message\n"
-        text += "Or you can /cancel it"
+        text = config.please_wait()
+      
         await update.message.reply_text(text, reply_to_message_id=update.message.id, parse_mode=ParseMode.HTML)
         return True
     else:
