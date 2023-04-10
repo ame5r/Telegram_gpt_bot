@@ -123,9 +123,13 @@ async def help_handle(update: Update, context: CallbackContext):
     user_id = update.message.from_user.id
     db.set_user_attribute(user_id, "last_interaction", datetime.now())
     if isAdmin(update.message.from_user):
-        await update.message.reply_text(config.ADMIN_HELP_MESSAGE, parse_mode=ParseMode.HTML)
+        await update.message.reply_text(config.ADMIN_HELP_MESSAGE, parse_mode=ParseMode.HTML,reply_markup=InlineKeyboardMarkup([
+        [InlineKeyboardButton(text='🧠 Купить Токены!', url=config.payme_link)],
+        ]))
     else:
-        await update.message.reply_text(config.HELP_MESSAGE, parse_mode=ParseMode.HTML)
+        await update.message.reply_text(config.HELP_MESSAGE, parse_mode=ParseMode.HTML,reply_markup=InlineKeyboardMarkup([
+        [InlineKeyboardButton(text='🧠 Купить Токены!', url=config.payme_link)],
+        ]))
 
 async def remove_allowed_user_handle(update: Update):
     if not isAdmin(update.message.from_user): return
@@ -158,7 +162,8 @@ def send_to_user(user_id,message):
     # set the request parameters
     params = {
         "chat_id": user_id,
-        "text": message
+        "text": message,
+        'parse_mode': 'HTML'
     }
 
     # send the API request
@@ -199,7 +204,7 @@ async def recharge_balance_handle(update: Update, context: CallbackContext):
     current_balance = await db.recharge_user_balance(user_id,amount)
     
 
-    send_to_user(user_id,config.you_got_tokens(amount,current_balance))
+    send_to_user(user_id,config.you_got_tokens(amount,current_balance,))
     
     
     
@@ -219,7 +224,7 @@ async def message_handle(update: Update, context: CallbackContext, message=None,
         hasBalance = await db.isHasBalance(user_id)
         if not hasBalance:
             await update.message.reply_text(config.no_tokens_message(), parse_mode=ParseMode.HTML,reply_markup=InlineKeyboardMarkup([
-        [InlineKeyboardButton(text='🧠 Buy Tokens', url=config.payme_link)],
+        [InlineKeyboardButton(text='🧠 Купить Токены!', url=config.payme_link)],
         ]))
             return
     except telegram.error.BadRequest as e:
@@ -539,12 +544,13 @@ async def show_balance_handle(update: Update, context: CallbackContext):
 
     total_n_spent_dollars += voice_recognition_n_spent_dollars
     
-    #text = f"You spent <b>{total_n_spent_dollars:.03f}$</b>\n"
-    text = f"You used <b>{total_n_used_tokens}</b> tokens\n\n"
-    text +=f"Your current balance is <b>{str(n_current_tokens)}</b> tokens\n"
+    text = config.balance_message(total_n_used_tokens,n_current_tokens) 
+
     #text += details_text
 
-    await update.message.reply_text(text, parse_mode=ParseMode.HTML)
+    await update.message.reply_text(text, parse_mode=ParseMode.HTML,reply_markup=InlineKeyboardMarkup([
+        [InlineKeyboardButton(text='🧠 Купить Токены!', url=config.payme_link)],
+        ]))
 
 
 async def edited_message_handle(update: Update, context: CallbackContext):
@@ -583,9 +589,10 @@ async def post_init(application: Application):
         #BotCommand("/new", "Start new dialog"),
         #BotCommand("/mode", "Select chat mode"),
         #BotCommand("/retry", "Re-generate response for previous query"),
-        BotCommand("/balance", "Show balance"),
+        BotCommand("/balance", "Показать Баланс"),
         #BotCommand("/settings", "Show settings"),
-        BotCommand("/help", "Show help message"),
+        BotCommand("/start", "Перезапуск бота"),
+        BotCommand("/help", "Помощь"),
     ])
 
 def run_bot() -> None:

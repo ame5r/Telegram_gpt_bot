@@ -22,10 +22,35 @@ payme_link = config_yaml['payme_link']
 mongodb_uri = f"mongodb://mongo:{config_env['MONGODB_PORT']}"
 admin_username = "galactusadmin"
 n_default_tokens = config_yaml['n_default_tokens']
-HELP_MESSAGE = f"""Commands:
-⚪ /balance – Show balance
-⚪ /help – Show help
-⚪ /paid - Send notifecation for admin to process transaction
+HELP_MESSAGE = f"""С помощью этого бота вы сможете получить все ответы на вопросы от Искусственного Интеллекта.
+Я могу:
+
+💻 Дать развернутый ответ, который не может дать вам Google.
+
+📝 Я могу написать для вас Essay(сочинение) на любую тему.
+
+📚 Написать Assignment, Реферат, Докладную работу на 3000 слов и больше.
+
+🧮 Решать сложные математические задания.
+
+💸 Написать бизнес план
+И помочь с работой
+
+Я понимаю более 10 языков, так же вы можете отправить мне аудио вместо текста.
+
+PRICE LIST
+🪬3000 ТОКЕНОВ(~700слов, 3~4 запроса) 15.000 сум
+🪬6000 ТОКЕНОВ(~1400слов, 6~7 запросов) 30.000 сум
+🪬10000 ТОКЕНОВ(~2400слов, 10~11 запросов) 50.000 сум
+ И тд.
+
+Чем больше токенов закупаете, тем больше бот выдает ответов. 
+Минимальная оплата 15.000 сум за 
+3000 токенов.
+Так же имеется услуга «безлимит» на определенное время.
+За подробностями @galactusadmin
+
+После оплаты, напишите в чат /paid для подтверждения.
 """
 ADMIN_HELP_MESSAGE = f"""Commands:
 ⚪ /balance – Show balance
@@ -33,24 +58,38 @@ ADMIN_HELP_MESSAGE = f"""Commands:
 ⚪ /paid - Send notifecation for admin to process transaction
 ⚪ /recharge USERID N_TOKENS - Add tokens for user with USERID
 """
-def no_tokens_message():
-    
-   return f"""<b>You have NO tokens left</b>
-You are run out of tokens.
-You need at least 100 tokens to be able to ask a question.
-But don't worry you can buy token with a small amount of money!
-Each 1000 tokens cost ONLY 0.02$.
-NOTE: 🔴🔴PLEASE USE YOUR TELEGRAM USER ID WHEN YOU PAY🔴🔴
-then send /paid to process your transation."""
+
+def no_tokens_message(): 
+   return f"""<b>У вас закончились ТОКЕНЫ…</b>
+Не расстраивайтесь, вы можете обрести токены за минимальную сумму денег!😜
+Каждые 3000 токенов = 15.000 сум!!!
+
+PRICE LIST
+🪬3000 ТОКЕНОВ(~700слов, 3~4 запроса) 15.000 сум
+🪬6000 ТОКЕНОВ(~1400слов, 6~7 запросов) 30.000 сум
+🪬10000 ТОКЕНОВ(~2400слов, 10~11 запросов) 50.000 сум
+ И тд.
+
+Чем больше токенов закупаете, тем больше бот выдает ответов. 
+Минимальная оплата 20.000 сум за 
+3000 токенов.
+Так же имеется услуга «безлимит» на определенное время.
+За подробностями @galactusadmin
+
+❗️После оплаты, напишите в чат /paid для подтверждения."""
 
 
 def you_got_tokens(amount, current_balance):
-    message = f"Congratulations!\nYou have new tokens now!🥳\n"
-    message += f"You got {amount} tokens."
-    message += f"Current balance: {current_balance}"
+    message = f"Поздравляем!!\nВы только что приобрели токены!🥳\n"
+    message += f"Вы получили <b>{amount}</b> токенов\n"
+    message += f"Ваш баланс: <b>{current_balance}</b>"
     return message
 
 
+def balance_message(total_n_used_tokens,n_current_tokens):
+    text = f"Вы использовали <b>{total_n_used_tokens}</b> токенов\n\n"
+    text +=f"Ваш баланс на данный момент <b>{str(n_current_tokens)}</b> токенов\n"
+    return text
 def invalid_parameters():
     return f"Invalid parameters"
 
@@ -65,16 +104,29 @@ def user_paid(username):
 
 
 def get_start_message(isAdmin,update):
-    reply_text = "Hi! I'm <b>ChatGPT</b> bot implemented with GPT-3.5 OpenAI API 🤖\n\n"
+    reply_text = ''
     if not isAdmin:
-        reply_text += HELP_MESSAGE
+        reply_text += f'''
+Hi! I'm GALACTUS BOT 🤖
+
+Commands:
+🪬/balance – Показать Баланс
+🪬/start – Перезапуск бота
+🪬/help – Помощь
+
+🎤 Вы так же можете отправить Голосовое вместо текста.
+
+НОВЫЙ ПОЛЬЗОВАТЕЛЬ ?
+❗️Мы предоставляем тебе бесплатно {n_default_tokens} ТОКЕНОВ!!!
+Просто задай вопрос:👩‍💻
+'''
     else:
         reply_text += ADMIN_HELP_MESSAGE
-    reply_text += f"\nNEW USER?\n🔴Currently you have FREE {n_default_tokens} tokens"
+   # reply_text += f"\nNEW USER?\n🔴Currently you have FREE {n_default_tokens} tokens"
 
-    reply_text += "\nAnd now... ask me anything!"
-    reply_text += f"\nYour ID is {update.message.from_user.id}"
-
+    #reply_text += "\nAnd now... ask me anything!"
+    #reply_text += f"\nYour ID is {update.message.from_user.id}"
+    return reply_text
 def please_wait():
     return "⏳ Please <b>wait</b> for a reply to the previous message\n"
 
