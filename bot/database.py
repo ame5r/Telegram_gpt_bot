@@ -17,6 +17,9 @@ class Database:
         self.user_collection = self.db["user"]
         self.dialog_collection = self.db["dialog"]
         self.allowed_users = self.db["allowed_users"]
+        #logger.info(self.user_collection.find_one({'chat_id':279677611 }))
+        #self.user_collection.delete_one({'chat_id': 279677611})
+        #logger.info(self.user_collection.find_one({'chat_id':279677611 }))
 
     def check_if_user_exists(self, user_id: int, raise_exception: bool = False):
  

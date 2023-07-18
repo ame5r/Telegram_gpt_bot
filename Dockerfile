@@ -10,7 +10,7 @@ ENV PIP_DEFAULT_TIMEOUT=100
 ENV LOG_LEVEL=INFO \
     LOG_FORMAT="%(asctime)s %(levelname)s %(message)s"
 RUN apt-get update
-RUN apt-get install -y python3 python3-pip python-dev build-essential python3-venv ffmpeg
+RUN apt-get install -y python3 python3-pip python3-dev build-essential python3-venv ffmpeg
 
 RUN mkdir -p /code
 ADD . /code

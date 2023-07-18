@@ -124,11 +124,11 @@ async def help_handle(update: Update, context: CallbackContext):
     db.set_user_attribute(user_id, "last_interaction", datetime.now())
     if isAdmin(update.message.from_user):
         await update.message.reply_text(config.ADMIN_HELP_MESSAGE, parse_mode=ParseMode.HTML,reply_markup=InlineKeyboardMarkup([
-        [InlineKeyboardButton(text='🧠 Купить Токены!', url=config.payme_link)],
+        [InlineKeyboardButton(text='🧠 Купить токены', url=config.payme_link)],
         ]))
     else:
         await update.message.reply_text(config.HELP_MESSAGE, parse_mode=ParseMode.HTML,reply_markup=InlineKeyboardMarkup([
-        [InlineKeyboardButton(text='🧠 Купить Токены!', url=config.payme_link)],
+        [InlineKeyboardButton(text='🧠 Купить токены', url=config.payme_link)],
         ]))
 
 async def remove_allowed_user_handle(update: Update):
@@ -224,7 +224,7 @@ async def message_handle(update: Update, context: CallbackContext, message=None,
         hasBalance = await db.isHasBalance(user_id)
         if not hasBalance:
             await update.message.reply_text(config.no_tokens_message(), parse_mode=ParseMode.HTML,reply_markup=InlineKeyboardMarkup([
-        [InlineKeyboardButton(text='🧠 Купить Токены!', url=config.payme_link)],
+        [InlineKeyboardButton(text='🧠 Купить токены', url=config.payme_link)],
         ]))
             return
     except telegram.error.BadRequest as e:
@@ -246,7 +246,7 @@ async def message_handle(update: Update, context: CallbackContext, message=None,
 
         # in case of CancelledError
         n_input_tokens, n_output_tokens = 0, 0
-        current_model = db.get_user_attribute(user_id, "current_model")
+        current_model = "gpt-3.5-turbo" # db.get_user_attribute(user_id, "current_model")
 
         try:
             # send placeholder message to user
@@ -402,10 +402,10 @@ async def new_dialog_handle(update: Update, context: CallbackContext):
     db.set_user_attribute(user_id, "last_interaction", datetime.now())
 
     db.start_new_dialog(user_id)
-    await update.message.reply_text("Starting new dialog ✅")
+    await update.message.reply_text("Начинаю новый диалог ✅")
 
-    chat_mode = db.get_user_attribute(user_id, "current_chat_mode")
-    await update.message.reply_text(f"{openai_utils.CHAT_MODES[chat_mode]['welcome_message']}", parse_mode=ParseMode.HTML)
+    #chat_mode = db.get_user_attribute(user_id, "current_chat_mode")
+    await update.message.reply_text(config.get_welcome_message(), parse_mode=ParseMode.HTML)
 
 
 async def cancel_handle(update: Update, context: CallbackContext):
@@ -549,7 +549,7 @@ async def show_balance_handle(update: Update, context: CallbackContext):
     #text += details_text
 
     await update.message.reply_text(text, parse_mode=ParseMode.HTML,reply_markup=InlineKeyboardMarkup([
-        [InlineKeyboardButton(text='🧠 Купить Токены!', url=config.payme_link)],
+        [InlineKeyboardButton(text='🧠 Купить токены', url=config.payme_link)],
         ]))
 
 
@@ -561,7 +561,7 @@ async def edited_message_handle(update: Update, context: CallbackContext):
 
 async def error_handle(update: Update, context: CallbackContext) -> None:
     logger.error(msg="Exception while handling an update:", exc_info=context.error)
-
+    '''
     try:
         # collect error message
         tb_list = traceback.format_exception(None, context.error, context.error.__traceback__)
@@ -583,15 +583,15 @@ async def error_handle(update: Update, context: CallbackContext) -> None:
                 await context.bot.send_message(update.effective_chat.id, message_chunk)
     except:
         await context.bot.send_message(update.effective_chat.id, "Some error in error handler")
-
+    '''
 async def post_init(application: Application):
     await application.bot.set_my_commands([
-        #BotCommand("/new", "Start new dialog"),
+        BotCommand("/new", "Начать новый диалог"),
         #BotCommand("/mode", "Select chat mode"),
         #BotCommand("/retry", "Re-generate response for previous query"),
         BotCommand("/balance", "Показать Баланс"),
         #BotCommand("/settings", "Show settings"),
-        BotCommand("/start", "Перезапуск бота"),
+        BotCommand("/start", "Главное меню"),
         BotCommand("/help", "Помощь"),
     ])
 
@@ -617,7 +617,7 @@ def run_bot() -> None:
     application.add_handler(CommandHandler("paid", user_paid, filters=user_filter))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & user_filter, message_handle))
  #   application.add_handler(CommandHandler("retry", retry_handle, filters=user_filter))
- #   application.add_handler(CommandHandler("new", new_dialog_handle, filters=user_filter))
+    application.add_handler(CommandHandler("new", new_dialog_handle, filters=user_filter))
   #  application.add_handler(CommandHandler("adduser", add_new_user_handle, filters=user_filter))
   #  application.add_handler(CommandHandler("removeuser", remove_allowed_user_handle, filters=user_filter))
   #  application.add_handler(CommandHandler("cancel", cancel_handle, filters=user_filter))
